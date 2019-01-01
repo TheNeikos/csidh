@@ -1,14 +1,14 @@
 use crate::global;
 use rand::prelude::*;
-use num_bigint::{BigInt, RandBigInt};
+use num_bigint::{BigUint, RandBigInt};
 
-pub fn action(a: BigInt, private: &[BigInt]) -> BigInt {
-    let any_zero = || { private.iter().any(|x| x != &BigInt::from(0)) };
+pub fn action(a: BigUint, private: &[BigUint]) -> BigUint {
+    let any_zero = || { private.iter().any(|x| x != &BigUint::from(0u32)) };
     let mut rng = thread_rng();
 
     while any_zero() {
-        let x = rng.gen_bigint_range(&BigInt::from(1), &global::p);
+        let x = rng.gen_biguint_range(&BigUint::from(1u32), &global::p);
     }
 
-    0.into()
+    0u32.into()
 }
