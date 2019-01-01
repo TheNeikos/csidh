@@ -1,6 +1,5 @@
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
-use num_integer::Integer;
 
 lazy_static! {
     pub static ref p: BigUint = {
@@ -15,10 +14,6 @@ lazy_static! {
         (&*p) - BigUint::from(2u32)
     };
 
-    pub static ref inv_4: BigUint = {
-        BigUint::from(4u32).modpow(&p_min_2, &p)
-    };
-
     pub static ref l: Vec<BigUint> = {
         let mut vec = vec![];
         let first_primes = primal::Primes::all().skip(1).take(73).map(Into::into);
@@ -31,12 +26,11 @@ lazy_static! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_integer::Integer;
 
     #[test]
     fn check_globals() {
         let other_p = BigUint::from(4u32) * l.iter().product::<BigUint>() - BigUint::from(1u32);
         assert!(*p == other_p);
-
-        assert_eq!((&*inv_4 * BigUint::from(4u32)).mod_floor(&p), BigUint::from(1u32));
     }
 }
