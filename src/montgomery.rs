@@ -1,20 +1,21 @@
 use num_bigint::BigUint;
 use num_traits::identities::{One, Zero};
 
-use crate::global;
 use crate::ffield::{Field, FieldElement};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Curve {
-    field: Field,
-    a: BigUint,
-    b: BigUint,
+    pub field: Field,
+    pub a: FieldElement,
+    b: FieldElement,
 }
 
 impl Curve {
     pub fn new(field: Field, a: BigUint, b: BigUint) -> Curve {
         Curve {
-            field, a, b,
+            a: field.get(a),
+            b: field.get(b),
+            field,
         }
     }
 
@@ -23,7 +24,7 @@ impl Curve {
         let right = &p.x * &p.x * &p.x + &p.x * &p.x * &self.a + &p.x;
 
         left == right
-    }
+        }
 
     fn recover(p: &Point, q: &ProjectivePoint, o: &ProjectivePoint) -> Point {
         let v1 = &p.x * &q.z;
@@ -53,6 +54,80 @@ impl Curve {
             z,
         }
     }
+
+    pub fn isogeny(&self, l: &BigUint, ker: &ProjectivePoint) -> Isogeny {
+        Isogeny {
+            curve: self.clone(),
+            d: (l - BigUint::from(1u32)) / BigUint::from(2u32),
+            ker: ker.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Isogeny {
+    curve: Curve,
+    d: BigUint,
+    ker: ProjectivePoint,
+}
+
+impl Isogeny {
+    pub fn evaluate(&self, point: &ProjectivePoint) -> ProjectivePoint {
+        let mut x = self.curve.field.get(1u32);
+        let mut z = self.curve.field.get(1u32);
+
+        let x_min_z = &point.x - &point.z;
+        let x_plu_z = &point.x + &point.z;
+
+        let mut i = BigUint::from(1u32);
+
+        loop {
+            let p_i = point.ladder(&i).0;
+
+            let xi_min_zi = &p_i.x - &p_i.z;
+            let xi_plu_zi = &p_i.x + &p_i.z;
+
+            let pair_1 = &x_min_z * &xi_plu_zi;
+            let pair_2 = &x_plu_z * &xi_min_zi;
+
+            x = x * (&pair_1 + &pair_2);
+            z = z * (&pair_1 - &pair_2);
+
+            if i == self.d {
+                break;
+            }
+            i = i + 1u32;
+        }
+
+        x = &x * &x * &point.x;
+        z = &z * &z * &point.z;
+
+        ProjectivePoint::new(self.curve.clone(), x.value().clone(), z.value().clone())
+    }
+
+    pub fn get_a(&self) -> FieldElement {
+        let one = self.curve.field.get(1u32);
+
+        let mut rho = self.curve.field.get(0u32);
+        let mut rho_tilde = self.curve.field.get(0u32);
+        let mut pi = self.curve.field.get(1u32);
+        let mut i = BigUint::from(1u32);
+
+        loop {
+            let x_k = &self.ker.ladder(&i).0.x;
+            rho = rho + x_k;
+            rho_tilde = rho_tilde + &one / x_k;
+            pi = pi * x_k;
+
+            if i == self.d {
+                break;
+            }
+            i = i + 1u32;
+        }
+
+        let six = self.curve.field.get(6u32);
+        return (&six * &rho - &six * &rho_tilde + &self.curve.a) * &pi * &pi;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,31 +149,9 @@ impl Point {
     }
 
     pub fn multiply(&self, k: &BigUint) -> Point {
-        let (x0, x1) = Point::ladder(&k, self.projectivize());
+        let (x0, x1) = self.projectivize().ladder(&k);
         let q = Curve::recover(self, &x0, &x1);
-        return q;
-    }
-
-    fn ladder(k: &BigUint, p: ProjectivePoint) -> (ProjectivePoint, ProjectivePoint) {
-        let mut x0 = p.clone();
-        let mut x1 = p.double();
-        let l = k.bits();
-        assert!(k >> (l-1) == BigUint::one());
-
-        // BUG! Rust can't do backwards ranges...
-        for i in (0..=(l-2)).rev() {
-            let b = (k >> i) & BigUint::one();
-            if b == BigUint::zero() {
-                let temp = x0.add(&x1, &p);
-                x1 = temp;
-                x0 = x0.double();
-            } else {
-                x0 = x0.add(&x1, &p);
-                x1 = x1.double();
-            }
-        }
-
-        return (x0, x1);
+        return q.unproject();
     }
 
     fn projectivize(&self) -> ProjectivePoint {
@@ -123,13 +176,10 @@ impl Point {
     fn unproject(self) -> Point {
         assert!(self.z != self.curve.field.get(0u32));
 
-        println!("{} {} {}", self.x, self.y, self.z);
-
         let x = &self.x / &self.z;
         let y = &self.y / &self.z;
         let z = &self.z / &self.z;
 
-        println!("{} {} {}", x, y, z);
         Point {
             x, y, z,
             curve: self.curve,
@@ -138,13 +188,56 @@ impl Point {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct ProjectivePoint {
+pub struct ProjectivePoint {
     curve: Curve,
     x: FieldElement,
     z: FieldElement,
 }
 
 impl ProjectivePoint {
+    pub fn new(curve: Curve, x: BigUint, z: BigUint) -> ProjectivePoint {
+        ProjectivePoint {
+            x: curve.field.get(x),
+            z: curve.field.get(z),
+            curve,
+        }
+    }
+
+    pub fn set_curve(&mut self, curve: Curve) {
+        self.curve = curve;
+    }
+
+    pub fn is_infinity(&self) -> bool {
+        self.z == self.curve.field.get(0u32)
+    }
+
+    pub fn ladder(&self, k: &BigUint) -> (ProjectivePoint, ProjectivePoint) {
+        let mut x0 = self.clone();
+        let mut x1 = self.double();
+
+        if k == &BigUint::one() {
+            return (x0, x1);
+        }
+
+        let l = k.bits();
+        assert!(k >> (l-1) == BigUint::one());
+
+        // BUG! Rust can't do backwards ranges...
+        for i in (0..=(l-2)).rev() {
+            let b = (k >> i) & BigUint::one();
+            if b == BigUint::zero() {
+                let temp = x0.add(&x1, self);
+                x1 = temp;
+                x0 = x0.double();
+            } else {
+                x0 = x0.add(&x1, self);
+                x1 = x1.double();
+            }
+        }
+
+        return (x0, x1);
+    }
+
 
     pub fn add(&self, other: &ProjectivePoint, orig: &ProjectivePoint) -> ProjectivePoint {
         let v0 = &self.x + &self.z;
@@ -160,8 +253,6 @@ impl ProjectivePoint {
         let x = &orig.z * &v3;
         let z = &orig.x * &v4;
 
-        assert!(x != self.curve.field.get(0u32));
-        assert!(z != self.curve.field.get(0u32));
         return ProjectivePoint {
             curve: self.curve.clone(),
             x,
@@ -177,13 +268,11 @@ impl ProjectivePoint {
         let x = &v1 * &v2;
         let v1 = &v1 - &v2;
         // Here was a bug! I forgot that division -> Modulo Ring
-        let a_2 = self.curve.field.get(&self.curve.a + 2u32);
+        let a_2 = &self.curve.a + &self.curve.field.get(2u32);
         let v3 = &v1 * &(&a_2 / &self.curve.field.get(4u32));
         let v3 = &v3 + &v2;
         let z = &v1 * &v3;
 
-        assert!(x != self.curve.field.get(0u32));
-        assert!(z != self.curve.field.get(0u32));
         return ProjectivePoint {
             curve: self.curve.clone(),
             x,

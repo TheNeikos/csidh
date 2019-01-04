@@ -1,6 +1,6 @@
-use crate::global;
 use num_bigint::BigUint;
 use num_integer::Integer;
+use num_bigint::RandBigInt;
 
 use std::fmt;
 use std::ops::{Add, Sub, Mul, Div, BitXor};
@@ -32,6 +32,10 @@ impl FieldElement {
             order: self.order.clone(),
             val: &*self.order - &self.val,
         }
+    }
+
+    pub fn value(&self) -> &BigUint {
+        &self.val
     }
 }
 
@@ -118,6 +122,18 @@ impl Sub for &FieldElement {
 
     fn sub(self, other: &FieldElement) -> FieldElement {
         let val = self + &other.add_inverse();
+        FieldElement {
+            val: val.val.mod_floor(&self.order),
+            order: self.order.clone(),
+        }
+    }
+}
+
+impl Sub<FieldElement> for FieldElement {
+    type Output = FieldElement;
+
+    fn sub(self, other: FieldElement) -> FieldElement {
+        let val = &self + &other.add_inverse();
         FieldElement {
             val: val.val.mod_floor(&self.order),
             order: self.order.clone(),
@@ -218,6 +234,11 @@ impl Field {
 
     pub fn order(&self) -> &BigUint {
         &self.order
+    }
+
+    pub fn random_element<R: RandBigInt>(&self, rng: &mut R) -> FieldElement {
+        let x = rng.gen_biguint_range(&1u32.into(), &self.order);
+        self.get(x)
     }
 }
 

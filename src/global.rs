@@ -14,6 +14,10 @@ lazy_static! {
         (&*p) - BigUint::from(2u32)
     };
 
+    pub static ref p_plus_1: BigUint = {
+        (&*p) + BigUint::from(1u32)
+    };
+
     pub static ref l: Vec<BigUint> = {
         let mut vec = vec![];
         let first_primes = primal::Primes::all().skip(1).take(73).map(Into::into);
