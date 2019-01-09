@@ -20,11 +20,15 @@ impl Curve {
     }
 
     pub fn contains(&self, p: &Point) -> bool {
-        let left = (&p.y * &p.y) * &self.b;
-        let right = &p.x * &p.x * &p.x + &p.x * &p.x * &self.a + &p.x;
+        let inv_b = &self.field.get(1u32) / &self.b;
+        let two_x = &p.x * &p.x;
+        let x_c = &p.x * &inv_b;
+
+        let left = (&p.y * &p.y) * &self.b * &inv_b;
+        let right = &two_x * &x_c + &two_x * &inv_b * &self.a + &x_c;
 
         left == right
-        }
+    }
 
     fn recover(p: &Point, q: &ProjectivePoint, o: &ProjectivePoint) -> Point {
         let v1 = &p.x * &q.z;
@@ -285,6 +289,7 @@ impl ProjectivePoint {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::global;
 
     #[test]
     fn check_mul() {
