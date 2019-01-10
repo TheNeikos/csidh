@@ -33,7 +33,7 @@ pub fn action(curve: &Curve, private: &[i32]) -> LargeUint {
         }
     }
 
-    let mut curve = *curve;
+    let mut p_curve = ProjectivePoint::new(curve.a, GaloisElement::from_u64(1));
     let mut done = [false; 2];
 
     loop {
@@ -44,9 +44,9 @@ pub fn action(curve: &Curve, private: &[i32]) -> LargeUint {
             continue;
         }
 
-        let p = ProjectivePoint::new(curve, x, GaloisElement::from_u64(1));
+        let p = ProjectivePoint::new(x, GaloisElement::from_u64(1));
 
-        let (mut p, _) = p.ladder(&k[sign]);
+        let (mut p, _) = p.ladder(&p_curve.x, &k[sign]);
 
         done[sign] = true;
 
@@ -60,10 +60,10 @@ pub fn action(curve: &Curve, private: &[i32]) -> LargeUint {
                     }
                 }
 
-                let (kernel, _) = p.ladder(&cof);
+                let (kernel, _) = p.ladder(&p_curve.x, &cof);
                 if !kernel.is_infinity() {
-                    let (new_a, new_p) = curve.isogeny(global::PRIMES[i], &kernel, &p);
-                    curve.a = new_a;
+                    let (new_a, new_p) = Curve::isogeny(global::PRIMES[i], &kernel, &p, &p_curve);
+                    p_curve = new_a;
                     p = new_p;
                     e[sign][i] -= 1;
                     if e[sign][i] == 0 {
@@ -80,7 +80,7 @@ pub fn action(curve: &Curve, private: &[i32]) -> LargeUint {
         }
     }
 
-    return curve.a.into_large_uint();;
+    return p_curve.x.into_large_uint();
 
     // while !all_zero(&private) {
     //     println!("{:?}", private);
