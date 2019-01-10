@@ -1,61 +1,12 @@
 use std::ops::{Add, Sub, Mul, Div};
+use rand::{CryptoRng, Rng};
 
-// -p^-1 mod 2^64
-static INV_MIN_P_MOD_R: u64 = 0x66c1301f632e294d;
-
-// 1
-static LUINT_1: GaloisElement = GaloisElement {
-    elements: [1, 0, 0, 0, 0, 0, 0 ,0]
-};
-
-static P_INT: LargeUint = LargeUint {
-    elements: [
-        0x1b81b90533c6c87b, 0xc2721bf457aca835, 0x516730cc1f0b4f25, 0xa7aac6c567f35507,
-        0x5afbfcc69322c9cd, 0xb42d083aedc88c42, 0xfc8ab0d15e3e4c4a, 0x65b48e8f740f89bf
-    ]
-};
-
-static P_MINUS_2: LargeUint = LargeUint {
-    elements: [
-        0x1b81b90533c6c879, 0xc2721bf457aca835, 0x516730cc1f0b4f25, 0xa7aac6c567f35507,
-        0x5afbfcc69322c9cd, 0xb42d083aedc88c42, 0xfc8ab0d15e3e4c4a, 0x65b48e8f740f89bf,
-    ]
-};
-
-static P_MINUS_1_HALVES: LargeUint = LargeUint {
-    elements: [
-        0x8dc0dc8299e3643d, 0xe1390dfa2bd6541a, 0xa8b398660f85a792, 0xd3d56362b3f9aa83,
-        0x2d7dfe63499164e6, 0x5a16841d76e44621, 0xfe455868af1f2625, 0x32da4747ba07c4df,
-    ]
-};
-
-static P: GaloisElement = GaloisElement {
-    elements: [
-        0x1b81b90533c6c87b, 0xc2721bf457aca835, 0x516730cc1f0b4f25, 0xa7aac6c567f35507,
-        0x5afbfcc69322c9cd, 0xb42d083aedc88c42, 0xfc8ab0d15e3e4c4a, 0x65b48e8f740f89bf
-    ]
-};
-
-// (2^512)^2 mod p
-static R_SQUARED_MOD_P: GaloisElement = GaloisElement {
-    elements: [
-        0x36905b572ffc1724, 0x67086f4525f1f27d, 0x4faf3fbfd22370ca, 0x192ea214bcc584b1,
-        0x5dae03ee2f5de3d0, 0x1e9248731776b371, 0xad5f166e20e4f52d, 0x4ed759aea6f3917e,
-    ]
-};
-
-// 2^512 mod p
-static GAL_1: GaloisElement = GaloisElement {
-    elements: [
-        0xc8fc8df598726f0a, 0x7b1bc81750a6af95, 0x5d319e67c1e961b4, 0xb0aa7275301955f1,
-        0x4a080672d9ba6c64, 0x97a5ef8a246ee77b, 0x06ea9e5d4383676a, 0x3496e2e117e0ec80,
-    ]
-};
+use crate::global::*;
 
 const LIMBS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct LargeUint {
+pub struct LargeUint {
     elements: [u64; LIMBS],
 }
 
@@ -72,7 +23,7 @@ impl LargeUint {
         }
     }
 
-    fn add_from(&mut self, other: &LargeUint) -> bool {
+    pub fn add_from(&mut self, other: &LargeUint) -> bool {
         let mut carry: bool = false;
         for i in 0..LIMBS {
             let (temp, c) = self.elements[i].overflowing_add(carry as u64);
@@ -97,6 +48,28 @@ impl LargeUint {
 
         return carry;
     }
+
+    pub fn mul_with_u64(&mut self, other: u64) {
+        let c = 0u64;
+        for i in 0..LIMBS {
+            let t = self.elements[i] as u128 * other as u128 + c as u128;
+            c = (t >> 64) as u64;
+            self.elements[i] = t as u64;
+        }
+    }
+
+    pub fn bits(&self) -> u64 {
+        for i in (0..(64u64 * LIMBS as u64)).rev() {
+            if self.bit(i) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    pub fn bit(&self, i: u64) -> bool {
+        (self.elements[i as usize / 64] >> i % 64) & 1 == 1
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -112,7 +85,7 @@ impl GaloisElement {
         GaloisElement::from_large_uint(lu)
     }
 
-    fn from_large_uint(lu: LargeUint) -> GaloisElement {
+    pub fn from_large_uint(lu: LargeUint) -> GaloisElement {
         let mut t = GaloisElement {
             elements: lu.elements,
         };
@@ -121,7 +94,7 @@ impl GaloisElement {
         return t;
     }
 
-    fn into_large_uint(&self) -> LargeUint {
+    pub fn into_large_uint(&self) -> LargeUint {
         let mut s = *self;
         s.mul_with(&LUINT_1);
         LargeUint {
@@ -132,6 +105,23 @@ impl GaloisElement {
     fn into_large_uint_priv(&self) -> LargeUint {
         LargeUint {
             elements: self.elements,
+        }
+    }
+
+    pub fn random_element<R: Rng + CryptoRng>(rng: &mut R) -> GaloisElement {
+        loop {
+            let mut elems = [0u64; LIMBS];
+            rng.fill(&mut elems);
+            let m = (1u64 << PBITS % 64) - 1;
+            elems[LIMBS - 1] &= m;
+
+            for i in (0..LIMBS).rev() {
+                if elems[i] < P.elements[i] {
+                    return GaloisElement { elements: elems };
+                } else if elems[i] > P.elements[i] {
+                    break;
+                }
+            }
         }
     }
 

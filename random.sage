@@ -4,6 +4,7 @@
 proof.all(False)
 
 ls = list(primes(3, 374)) + [587] # Elkies primes
+print ls
 p = 4 * prod(ls) - 1
 base = GF(p)
 A = 0

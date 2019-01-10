@@ -8,6 +8,7 @@ _sage_const_3 = Integer(3); _sage_const_1 = Integer(1); _sage_const_0 = Integer(
 proof.all(False)
 
 ls = list(primes(_sage_const_3 , _sage_const_374 )) + [_sage_const_587 ] # Elkies primes
+print ls
 p = _sage_const_4  * prod(ls) - _sage_const_1 
 base = GF(p)
 A = _sage_const_0 
