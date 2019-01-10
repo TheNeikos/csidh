@@ -7,7 +7,7 @@ const LIMBS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LargeUint {
-    elements: [u64; LIMBS],
+    pub elements: [u64; LIMBS],
 }
 
 impl LargeUint {
@@ -21,6 +21,14 @@ impl LargeUint {
         LargeUint {
             elements: [u, 0, 0, 0, 0, 0, 0, 0],
         }
+    }
+
+    pub fn parse_bytes(s: &[u8]) -> LargeUint {
+        s.iter().fold(LargeUint::new(), |mut acc, x| {
+            acc.mul_with_u64(10);
+            acc.add_from(&LargeUint::from_u64((x - b'0') as u64));
+            acc
+        })
     }
 
     pub fn add_from(&mut self, other: &LargeUint) -> bool {
@@ -50,7 +58,7 @@ impl LargeUint {
     }
 
     pub fn mul_with_u64(&mut self, other: u64) {
-        let c = 0u64;
+        let mut c = 0u64;
         for i in 0..LIMBS {
             let t = self.elements[i] as u128 * other as u128 + c as u128;
             c = (t >> 64) as u64;
@@ -59,10 +67,12 @@ impl LargeUint {
     }
 
     pub fn bits(&self) -> u64 {
-        for i in (0..(64u64 * LIMBS as u64)).rev() {
-            if self.bit(i) {
-                return i;
+        for i in (0..LIMBS).rev() {
+            if self.elements[i] == 0 {
+                continue;
             }
+            let zeros = self.elements[i].leading_zeros();
+            return (64 - zeros as u64) + (i * 64) as u64;
         }
         return 0;
     }
@@ -72,9 +82,28 @@ impl LargeUint {
     }
 }
 
+impl std::convert::From<u32> for LargeUint {
+    fn from(u: u32) -> LargeUint {
+        LargeUint::from_u64(u as u64)
+    }
+}
+
+impl std::fmt::Display for LargeUint {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[")?;
+        for i in 0..LIMBS {
+            write!(f, "{:x}", self.elements[i])?;
+            if i != LIMBS - 1 {
+                write!(f, " ")?;
+            }
+        }
+        write!(f, "]")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GaloisElement {
-    elements: [u64; LIMBS],
+    pub elements: [u64; LIMBS],
 }
 
 impl GaloisElement {
@@ -125,7 +154,7 @@ impl GaloisElement {
         }
     }
 
-    fn sub_from(&mut self, other: &GaloisElement) -> bool {
+    pub fn sub_from(&mut self, other: &GaloisElement) -> bool {
         let mut s = self.into_large_uint_priv();
         let o = other.into_large_uint_priv();
         let r = s.sub_from(&o);
@@ -136,7 +165,7 @@ impl GaloisElement {
         return r;
     }
 
-    fn add_from(&mut self, other: &GaloisElement) -> bool {
+    pub fn add_from(&mut self, other: &GaloisElement) -> bool {
         let mut s = self.into_large_uint_priv();
         let o = other.into_large_uint_priv();
         let r = s.add_from(&o);
@@ -145,7 +174,7 @@ impl GaloisElement {
         return r;
     }
 
-    fn mul_with(&mut self, other: &GaloisElement) {
+    pub fn mul_with(&mut self, other: &GaloisElement) {
         let mut temp = [0u64; LIMBS + 1];
         for k in 0..LIMBS {
             let r = |i| -> usize { (k + i) % (LIMBS + 1) };
@@ -249,6 +278,19 @@ impl Add for GaloisElement {
     fn add(mut self, other: GaloisElement) -> GaloisElement {
         self.add_from(&other);
         self
+    }
+}
+
+impl std::fmt::Display for GaloisElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[")?;
+        for i in 0..LIMBS {
+            write!(f, "{:x}", self.elements[i])?;
+            if i != LIMBS - 1 {
+                write!(f, " ")?;
+            }
+        }
+        write!(f, "] mod p")
     }
 }
 
@@ -429,5 +471,28 @@ mod test {
         let one = GaloisElement::from_u64(1);
         let two = GaloisElement::from_u64(2);
         assert_eq!(((one - two) * two + one + one + two)/ two, one);
+    }
+
+    #[test]
+    fn check_parse() {
+        let one = LargeUint::from_u64(1);
+        let one_parsed = LargeUint::parse_bytes(b"1");
+        assert_eq!(one, one_parsed);
+
+        let foo = LargeUint::from_u64(12314123);
+        let foo_parsed = LargeUint::parse_bytes(b"12314123");
+        assert_eq!(foo, foo_parsed);
+    }
+
+    #[test]
+    fn check_bits() {
+        let one = LargeUint::from_u64(1);
+        assert_eq!(one.bits(), 1);
+
+        let one = LargeUint {
+            elements: [0, 1, 1, 1, 1, 1, 0, 2]
+        };
+
+        assert_eq!(one.bits(), 7 * 64 + 2);
     }
 }

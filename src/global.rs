@@ -1,6 +1,7 @@
 use crate::galois::{LargeUint, GaloisElement};
 
-pub static PBITS: u64 = 511;
+pub const PBITS: u64 = 511;
+pub const NUM_PRIMES: usize = 74;
 
 // -p^-1 mod 2^64
 pub static INV_MIN_P_MOD_R: u64 = 0x66c1301f632e294d;
@@ -54,7 +55,7 @@ pub static GAL_1: GaloisElement = GaloisElement {
     ]
 };
 
-pub static LS: [u64; 74] = [
+pub static PRIMES: [u64; 74] = [
     3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97,
     101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193,
     197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307,
@@ -67,7 +68,7 @@ mod test {
 
     #[test]
     fn check_bits() {
-        assert_eq!(PBITS, P.into_large_uint().bits());
+        assert_eq!(PBITS, P_INT.bits());
     }
 }
 

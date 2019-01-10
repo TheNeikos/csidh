@@ -1,6 +1,6 @@
 use crate::galois::{GaloisElement, LargeUint};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Curve {
     pub a: GaloisElement,
     b: GaloisElement,
@@ -12,6 +12,16 @@ impl Curve {
             a: GaloisElement::from_large_uint(a),
             b: GaloisElement::from_large_uint(b),
         }
+    }
+
+    pub fn right_side(&self, x: &GaloisElement) -> GaloisElement {
+        let mut ret = *x;
+        ret.square();
+        let t = self.a * *x;
+        ret.add_from(&t);
+        ret.add_from(&crate::global::GAL_1);
+        ret.mul_with(x);
+        return ret;
     }
 
     pub fn contains(&self, p: &Point) -> bool {
@@ -47,38 +57,38 @@ impl Curve {
         let z  = v1 * q.z;
 
         Point {
-            curve: p.curve.clone(),
+            curve: p.curve,
             x,
             y,
             z,
         }
     }
 
-    pub fn isogeny(&self, l: u64, ker: &ProjectivePoint) -> Isogeny {
-        Isogeny {
-            curve: self.clone(),
-            d: (l - 1) / 2,
-            ker: ker.clone(),
+    pub fn isogeny(&self, l: u64, ker: &ProjectivePoint, point: &ProjectivePoint) -> (GaloisElement, ProjectivePoint) {
+        let d = (l - 1) / 2;
+        let one = GaloisElement::from_u64(1);
+
+        let mut rho = GaloisElement::from_u64(0);
+        let mut rho_tilde = GaloisElement::from_u64(0);
+        let mut pi = GaloisElement::from_u64(1);
+
+        for i in 1..d {
+            let x_k = ker.ladder(&LargeUint::from_u64(i)).0.x;
+            rho = rho + x_k;
+            rho_tilde = rho_tilde + one / x_k;
+            pi = pi * x_k;
         }
-    }
-}
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Isogeny {
-    curve: Curve,
-    d: u64,
-    ker: ProjectivePoint,
-}
+        let six = GaloisElement::from_u64(6);
+        let new_a = (six * rho - six * rho_tilde + self.a) * pi * pi;
 
-impl Isogeny {
-    pub fn evaluate(&self, point: &ProjectivePoint) -> ProjectivePoint {
         let mut x = GaloisElement::from_u64(1);
         let mut z = GaloisElement::from_u64(1);
 
         let x_min_z = point.x - point.z;
         let x_plu_z = point.x + point.z;
 
-        for i in 0..self.d {
+        for i in 1..d {
             let p_i = point.ladder(&LargeUint::from_u64(i)).0;
 
             let xi_min_zi = p_i.x - p_i.z;
@@ -95,25 +105,9 @@ impl Isogeny {
         x = x * x * point.x;
         z = z * z * point.z;
 
-        ProjectivePoint::new(self.curve.clone(), x, z)
-    }
+        let new_p = ProjectivePoint::new(*self, x, z);
 
-    pub fn get_a(&self) -> GaloisElement {
-        let one = GaloisElement::from_u64(1);
-
-        let mut rho = GaloisElement::from_u64(0);
-        let mut rho_tilde = GaloisElement::from_u64(0);
-        let mut pi = GaloisElement::from_u64(1);
-
-        for i in 0..self.d {
-            let x_k = self.ker.ladder(&LargeUint::from_u64(i)).0.x;
-            rho = rho + x_k;
-            rho_tilde = rho_tilde + one / x_k;
-            pi = pi * x_k;
-        }
-
-        let six = GaloisElement::from_u64(6);
-        return (six * rho - six * rho_tilde + self.curve.a) * pi * pi;
+        return (new_a, new_p);
     }
 }
 
@@ -147,13 +141,13 @@ impl Point {
 
         if self.x == zero || self.z == zero {
             ProjectivePoint {
-                curve: self.curve.clone(),
+                curve: self.curve,
                 x: GaloisElement::from_u64(1),
                 z: GaloisElement::from_u64(0),
             }
         } else {
             ProjectivePoint {
-                curve: self.curve.clone(),
+                curve: self.curve,
                 x: self.x.clone(),
                 z: GaloisElement::from_u64(1),
             }
@@ -237,7 +231,7 @@ impl ProjectivePoint {
         let z = orig.x * v4;
 
         return ProjectivePoint {
-            curve: self.curve.clone(),
+            curve: self.curve,
             x,
             z,
         }
@@ -257,7 +251,7 @@ impl ProjectivePoint {
         let z = v1 * v3;
 
         return ProjectivePoint {
-            curve: self.curve.clone(),
+            curve: self.curve,
             x,
             z,
         }
@@ -272,21 +266,21 @@ mod test {
 
     #[test]
     fn check_mul() {
-        let x = LargeUint::parse_bytes(b"2051044887188588280366899510711463515184102432059522841387541984999186019238289110841661333718393379209806643406155944602233875537370058705956384966209858", 10).unwrap();
-        let y = LargeUint::parse_bytes(b"2999054700883294606115636709285947688603015463995111523694534197644452886751843273757676343103953201273958036952062931228773567734286840492294219977378136", 10).unwrap();
+        let x = LargeUint::parse_bytes(b"2051044887188588280366899510711463515184102432059522841387541984999186019238289110841661333718393379209806643406155944602233875537370058705956384966209858");
+        let y = LargeUint::parse_bytes(b"2999054700883294606115636709285947688603015463995111523694534197644452886751843273757676343103953201273958036952062931228773567734286840492294219977378136");
 
-        let other_x = LargeUint::parse_bytes(b"1254817631949275079030490581963578364746575569014839158947538007979236709253796922466332191140273712204313677321924940880514829958528954596325165920058277", 10).unwrap();
-        let other_y = LargeUint::parse_bytes(b"2381495309685763751265865484184529659090354786855457591442552214156841700513768692570497752099605704710183797526595611214891101033449784504091079214700929", 10).unwrap();
+        let other_x = LargeUint::parse_bytes(b"1254817631949275079030490581963578364746575569014839158947538007979236709253796922466332191140273712204313677321924940880514829958528954596325165920058277");
+        let other_y = LargeUint::parse_bytes(b"2381495309685763751265865484184529659090354786855457591442552214156841700513768692570497752099605704710183797526595611214891101033449784504091079214700929");
 
         let a = 0u32.into();
         let b = 1u32.into();
         let curve = Curve::new(a, b);
-        let point = Point::new(curve.clone(), x, y);
+        let point = Point::new(curve, x, y);
         assert!(curve.contains(&point));
-        let other_point = Point::new(curve.clone(), other_x, other_y);
+        let other_point = Point::new(curve, other_x, other_y);
         assert!(curve.contains(&other_point));
 
-        let multiplied = point.multiply(&LargeUint::from_u64(9u32)).unproject();
+        let multiplied = point.multiply(&LargeUint::from_u64(9u64)).unproject();
 
         println!("X: {}\nY: {}\nZ: {}\n\nX: {}\nY: {}\nZ: {}",
                  multiplied.x, multiplied.y, multiplied.z,
