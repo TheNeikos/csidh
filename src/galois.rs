@@ -23,6 +23,14 @@ impl LargeUint {
         }
     }
 
+    pub fn as_bytes(&self) -> Vec<u8> {
+        use byteorder::{ByteOrder, LittleEndian};
+        let mut bytes = vec![0; 8 * LIMBS];
+
+        LittleEndian::write_u64_into(&self.elements, &mut bytes[..]);
+        return bytes;
+    }
+
     pub fn parse_bytes(s: &[u8]) -> LargeUint {
         s.iter().fold(LargeUint::new(), |mut acc, x| {
             acc.mul_with_u64(10);

@@ -4,7 +4,7 @@ use crate::global;
 use crate::montgomery::{Curve, ProjectivePoint};
 use crate::galois::{LargeUint, GaloisElement};
 
-pub fn action(curve: &Curve, private: &[i8]) -> LargeUint {
+fn action(curve: &Curve, private: &[i8]) -> LargeUint {
     let mut rng = thread_rng();
 
     let mut k = [LargeUint::from_u64(4) ;2];
@@ -82,3 +82,44 @@ pub fn action(curve: &Curve, private: &[i8]) -> LargeUint {
 
     return p_curve.x.into_large_uint();
 }
+
+pub struct CsidhPrivateKey {
+    key: [i8; global::NUM_PRIMES]
+}
+
+impl CsidhPrivateKey {
+    pub fn generate_new<S: CryptoRng + Rng>(mut rng: &mut S) -> CsidhPrivateKey {
+        use rand::distributions::{Distribution, Uniform};
+
+        let between = Uniform::from(-5..=5);
+        let mut secret = [0i8; global::NUM_PRIMES];
+
+        for i in 0..global::NUM_PRIMES {
+            secret[i] = between.sample(&mut rng);
+        }
+
+        CsidhPrivateKey {
+            key: secret,
+        }
+    }
+
+    pub fn get_public_key(&self) -> CsidhPublicKey {
+        let curve = Curve::new(0u32.into(), 1u32.into());
+        let a = action(&curve, &self.key);
+
+        CsidhPublicKey {
+            a
+        }
+    }
+
+    pub fn get_shared_secret(&self, other: &CsidhPublicKey) -> Vec<u8> {
+        let their_curve = Curve::new(other.a, 1u32.into());
+        let s = action(&their_curve, &self.key);
+        s.as_bytes()
+   }
+}
+
+pub struct CsidhPublicKey {
+    a: LargeUint,
+}
+

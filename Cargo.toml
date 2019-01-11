@@ -5,4 +5,5 @@ name = "csidh"
 version = "0.1.0"
 
 [dependencies]
+byteorder = "1.2.7"
 rand = "0.6.1"
