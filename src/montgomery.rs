@@ -14,19 +14,9 @@ impl Curve {
         }
     }
 
-    pub fn right_side(&self, x: &GaloisElement) -> GaloisElement {
-        let mut ret = *x;
-        ret.square();
-        let t = self.a * *x;
-        ret.add_from(&t);
-        ret.add_from(&crate::global::GAL_1);
-        ret.mul_with(x);
-        return ret;
-    }
-
     pub fn contains(&self, p: &Point) -> bool {
         let left = (p.y * p.y) * self.b;
-        let right = self.right_side(&p.x);
+        let right = Curve::right_side(&self.a, &p.x);
 
         left == right
     }
@@ -60,27 +50,37 @@ impl Curve {
         }
     }
 
-    pub fn isogeny(k: u64, ker: &ProjectivePoint, point: &ProjectivePoint, a: &ProjectivePoint)
-        -> (ProjectivePoint, ProjectivePoint)
+    pub fn right_side(a: &GaloisElement, x: &GaloisElement) -> GaloisElement {
+        let mut ret = *x;
+        ret.square();
+        let t = *a * *x;
+        ret.add_from(&t);
+        ret.add_from(&crate::global::GAL_1);
+        ret.mul_with(x);
+        return ret;
+    }
+
+    pub fn isogeny(a: &mut ProjectivePoint, p: &mut ProjectivePoint, k: &ProjectivePoint, l: u64)
     {
-        let mut t = [ker.z, ker.x, ker.x, ker.z];
+        let mut t = [k.z, k.x, k.x, k.z];
         let mut tmp0;
         let mut tmp1;
-        let mut q = ProjectivePoint::new({
-            let x = ker.x * point.x;
-            tmp0 = ker.z * point.z;
-            x - tmp0
-        }, {
-            let z = ker.z * point.x;
-            tmp0 = ker.x * point.z;
-            z - tmp0
-        });
-        let mut m = [*ker; 3];
-        m[1] = ker.double(&a.x);
+        let mut q = ProjectivePoint::new(GaloisElement::from_u64(1), GaloisElement::from_u64(1));
 
-        for i in 1..(k as usize / 2) {
+		q.x =  p.x * k.x;
+        tmp0 = p.z * k.z;
+        q.x.sub_from(&tmp0);
+
+		q.z =  p.x * k.z;
+        tmp0 = p.z * k.x;
+        q.z.sub_from(&tmp0);
+
+        let mut m = [*k; 3];
+        m[1] = k.double2(&a);
+
+        for i in 1..(l as usize / 2) {
             if i >= 2 {
-                m[i % 3] = m[(i -1) % 3].add(ker, &m[(i - 2) % 3]);
+                m[i % 3] = m[(i -1) % 3].add(k, &m[(i - 2) % 3]);
             }
 
             tmp0 = m[i % 3].x * t[0];
@@ -96,13 +96,13 @@ impl Curve {
             t[3].mul_with(&m[i % 3].z);
 
 
-            tmp0 = point.x * m[i % 3].x;
-            tmp1 = point.z * m[i % 3].z;
+            tmp0 = p.x * m[i % 3].x;
+            tmp1 = p.z * m[i % 3].z;
             tmp0.sub_from(&tmp1);
             q.x.mul_with(&tmp0);
 
-            tmp0 = point.x * m[i % 3].z;
-            tmp1 = point.z * m[i % 3].x;
+            tmp0 = p.x * m[i % 3].z;
+            tmp1 = p.z * m[i % 3].x;
             tmp0.sub_from(&tmp1);
             q.z.mul_with(&tmp0);
         }
@@ -127,22 +127,15 @@ impl Curve {
         tmp1 = t[1] * t[3];
         tmp1.mul_with(&a.x);
 
-        let mut a_x = tmp1 - tmp0;
+        a.x = tmp1 - tmp0;
 
         t[3].square();
-        let mut a_z = t[3];
+        a.z = a.z * t[3];
 
         q.x.square();
         q.z.square();
-
-        // We normalize here right away
-
-        a_z.inverse();
-        a_x.mul_with(&a_z);
-
-        let new_a = ProjectivePoint::new(a_x, GaloisElement::from_u64(1));
-
-        return (new_a, q);
+		p.x.mul_with(&q.x);
+		p.z.mul_with(&q.z);
     }
 }
 
@@ -218,6 +211,78 @@ impl ProjectivePoint {
         self.z == GaloisElement::from_u64(0)
     }
 
+    fn double_add(r: &mut ProjectivePoint, s: &mut ProjectivePoint, p: ProjectivePoint,
+                  q: ProjectivePoint, pq: &ProjectivePoint, curve: &ProjectivePoint) {
+        let a = q.x + q.z;
+        let b = q.x - q.z;
+        let mut c = p.x + p.z;
+        let mut d = p.x - p.z;
+        r.x = c.clone().square();
+        s.x = d.clone().square();
+        c.mul_with(&b);
+        d.mul_with(&a);
+        let b = r.x - s.x;
+        let a = curve.z + curve.z;
+        r.z = a * s.x;
+        s.x = curve.x + a;
+        r.z.add_from(&{r.z});
+        r.x.mul_with(&r.z);
+        s.x.mul_with(&b);
+        s.z = c - d;
+        r.z.add_from(&s.x);
+        s.x = c + d;
+        r.z.mul_with(&b);
+        let d = s.z.square();
+        let b = s.x.square();
+        s.x = pq.z * b;
+        s.z = pq.x * d;
+    }
+
+    pub fn ladder2(&self, curve: &ProjectivePoint, k: &LargeUint) -> ProjectivePoint {
+        let mut r = *self;
+        let copy = *self;
+
+        let mut ret = ProjectivePoint::new(GaloisElement::from_u64(1), GaloisElement::from_u64(0));
+
+        let l = k.bits();
+
+        for i in (0..l).rev() {
+            let bit = k.bit(i);
+
+            if bit {
+                std::mem::swap(&mut ret, &mut r);
+            }
+
+            let r2 = r;
+            let ret2 = ret;
+            ProjectivePoint::double_add(&mut ret, &mut r, ret2, r2, &copy, curve);
+
+            if bit {
+                std::mem::swap(&mut ret, &mut r);
+            }
+        }
+
+        return ret;
+    }
+
+    pub fn double2(&self, curve: &ProjectivePoint) -> ProjectivePoint {
+        let mut a = self.x + self.z;
+        a.square();
+        let mut b = self.x - self.z;
+        b.square();
+        let c = a - b;
+        b.add_from(&{b});
+        b.add_from(&{b});
+        b.mul_with(&curve.z);
+        let qx = a * b;
+        a = curve.z + curve.z;
+        a.add_from(&curve.x);
+        a.mul_with(&c);
+        a.add_from(&b);
+        let qz = a * c;
+        return ProjectivePoint { x: qx, z: qz };
+    }
+
     pub fn ladder(&self, a: &GaloisElement, k: &LargeUint) -> (ProjectivePoint, ProjectivePoint) {
         let mut x0 = self.clone();
         let mut x1 = self.double(a);
@@ -228,7 +293,6 @@ impl ProjectivePoint {
 
         let l = k.bits();
 
-        // BUG! Rust can't do backwards ranges...
         for i in (0..=(l-2)).rev() {
             if !k.bit(i) {
                 let temp = x0.add(&x1, self);
@@ -282,6 +346,12 @@ impl ProjectivePoint {
             z,
         }
     }
+
+    fn normalize(&mut self) {
+        self.z.inverse();
+        self.x.mul_with(&self.z);
+        self.z = GaloisElement::from_u64(1);
+    }
 }
 
 
@@ -313,5 +383,54 @@ mod test {
                  other_point.x.into_large_uint(), other_point.y.into_large_uint(), other_point.z.into_large_uint());
 
         assert_eq!(other_point, multiplied);
+    }
+
+    #[test]
+    fn check_ladder2() {
+        let x = LargeUint::parse_bytes(b"2051044887188588280366899510711463515184102432059522841387541984999186019238289110841661333718393379209806643406155944602233875537370058705956384966209858");
+        let y = LargeUint::parse_bytes(b"2999054700883294606115636709285947688603015463995111523694534197644452886751843273757676343103953201273958036952062931228773567734286840492294219977378136");
+
+        let a = 0u32.into();
+        let b = 1u32.into();
+        let curve = Curve::new(a, b);
+        let point = Point::new(curve, x, y);
+        assert!(curve.contains(&point));
+
+        let mut mult = point.projectivize().ladder(&curve.a, &LargeUint::from_u64(5)).0;
+
+        let p_curve = ProjectivePoint::new(curve.a, GaloisElement::from_u64(1));
+
+        let mut mult2 = point.projectivize().ladder2(&p_curve, &LargeUint::from_u64(5));
+
+        mult.normalize();
+        mult2.normalize();
+        assert_eq!(mult, mult2)
+    }
+
+    #[test]
+    fn check_isogeny() {
+        let x = LargeUint::parse_bytes(b"2051044887188588280366899510711463515184102432059522841387541984999186019238289110841661333718393379209806643406155944602233875537370058705956384966209858");
+        let y = LargeUint::parse_bytes(b"2999054700883294606115636709285947688603015463995111523694534197644452886751843273757676343103953201273958036952062931228773567734286840492294219977378136");
+
+        let other_x = LargeUint::parse_bytes(b"1254817631949275079030490581963578364746575569014839158947538007979236709253796922466332191140273712204313677321924940880514829958528954596325165920058277");
+        let other_y = LargeUint::parse_bytes(b"2381495309685763751265865484184529659090354786855457591442552214156841700513768692570497752099605704710183797526595611214891101033449784504091079214700929");
+
+        let a = 0u32.into();
+        let b = 1u32.into();
+        let curve = Curve::new(a, b);
+        let point = Point::new(curve, x, y);
+        assert!(curve.contains(&point));
+        let other_point = Point::new(curve, other_x, other_y);
+
+        let mut proj_c = ProjectivePoint::new(curve.a, GaloisElement::from_u64(3));
+        let proj_other = other_point.projectivize().ladder2(&proj_c, &LargeUint::from_u64(3));;
+        let mut proj_point = point.projectivize();
+
+        Curve::isogeny(&mut proj_c, &mut proj_point, &proj_other, 3);
+
+        proj_c.z.inverse();
+        proj_c.x.mul_with(&proj_c.z);
+
+        assert!(Curve::right_side(&proj_c.x, &proj_point.x).is_square());
     }
 }

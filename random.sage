@@ -12,4 +12,8 @@ B = 1
 E = EllipticCurve(base, [0, A, 0, B, 0])
 R = E.random_element()
 print R.xy()
-print (9 * R).xy()
+Q = (3 * R)
+I = E.isogeny(Q)
+
+print I
+

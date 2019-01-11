@@ -3,7 +3,7 @@ use rand::{CryptoRng, Rng};
 
 use crate::global::*;
 
-const LIMBS: usize = 8;
+pub const LIMBS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LargeUint {
@@ -92,7 +92,7 @@ impl std::fmt::Display for LargeUint {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "[")?;
         for i in 0..LIMBS {
-            write!(f, "{:x}", self.elements[i])?;
+            write!(f, "0x{:016x}", self.elements[i])?;
             if i != LIMBS - 1 {
                 write!(f, " ")?;
             }
@@ -235,8 +235,9 @@ impl GaloisElement {
         self.reduce_once();
     }
 
-    pub fn square(&mut self) {
+    pub fn square(&mut self) -> GaloisElement {
         self.mul_with(&{*self});
+        *self
     }
 
     fn pow(&mut self, exp: &LargeUint) {
@@ -285,7 +286,7 @@ impl std::fmt::Display for GaloisElement {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "[")?;
         for i in 0..LIMBS {
-            write!(f, "{:x}", self.elements[i])?;
+            write!(f, "0x{:016x}", self.elements[i])?;
             if i != LIMBS - 1 {
                 write!(f, " ")?;
             }
