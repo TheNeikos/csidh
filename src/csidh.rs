@@ -51,7 +51,6 @@ pub fn action(curve: &Curve, private: &[i32]) -> LargeUint {
         done[sign] = true;
 
         for i in (0..global::NUM_PRIMES).rev() {
-            println!("Checking {}", i);
             if e[sign][i] != 0 {
                 let mut cof = LargeUint::from_u64(1);
                 for j in 0..i {

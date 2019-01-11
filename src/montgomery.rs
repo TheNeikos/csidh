@@ -140,8 +140,6 @@ impl Curve {
         a_z.inverse();
         a_x.mul_with(&a_z);
 
-
-        println!("{}", a_x);
         let new_a = ProjectivePoint::new(a_x, GaloisElement::from_u64(1));
 
         return (new_a, q);
