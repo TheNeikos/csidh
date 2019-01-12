@@ -25,7 +25,7 @@ optional = false
 path = "../../."
 
 [dependencies.web-sys]
-features = ["Document", "Element", "HtmlElement", "Node", "Window"]
+features = ["Document", "Element", "HtmlElement", "Node", "Window", "Performance"]
 version = "0.3"
 
 [dependencies.wee_alloc]
