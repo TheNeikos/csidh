@@ -1,4 +1,4 @@
-use csidh::csidh::CsidhPrivateKey;
+use csidh::CsidhPrivateKey;
 
 fn main() {
     let mut rng = rand::thread_rng();

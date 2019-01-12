@@ -83,11 +83,22 @@ fn action(curve: &Curve, private: &[i8]) -> LargeUint {
     return p_curve.x.into_large_uint();
 }
 
+/// A private key for the CSIDH algorithm
 pub struct CsidhPrivateKey {
     key: [i8; global::NUM_PRIMES]
 }
 
 impl CsidhPrivateKey {
+    /// Generates a new private key
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use csidh::CsidhPrivateKey;
+    /// # let mut rng: rand::rngs::ThreadRng = unimplemented!();
+    /// let private = CsidhPrivateKey::generate_new(&mut rng);
+    /// let public = private.get_public_key();
+    /// ```
     pub fn generate_new<S: CryptoRng + Rng>(mut rng: &mut S) -> CsidhPrivateKey {
         use rand::distributions::{Distribution, Uniform};
 
@@ -103,6 +114,16 @@ impl CsidhPrivateKey {
         }
     }
 
+    /// Gets the associated public key
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use csidh::CsidhPrivateKey;
+    /// # let mut rng: rand::rngs::ThreadRng = unimplemented!();
+    /// # let private = CsidhPrivateKey::generate_new(&mut rng);
+    /// let public = private.get_public_key();
+    /// ```
     pub fn get_public_key(&self) -> CsidhPublicKey {
         let curve = Curve::new(0u32.into(), 1u32.into());
         let a = action(&curve, &self.key);
@@ -112,6 +133,7 @@ impl CsidhPrivateKey {
         }
     }
 
+    /// Computes the shared secret with another public key
     pub fn get_shared_secret(&self, other: &CsidhPublicKey) -> Vec<u8> {
         let their_curve = Curve::new(other.a, 1u32.into());
         let s = action(&their_curve, &self.key);
@@ -119,6 +141,7 @@ impl CsidhPrivateKey {
    }
 }
 
+/// A public key for the CSIDH algorithm
 pub struct CsidhPublicKey {
     a: LargeUint,
 }

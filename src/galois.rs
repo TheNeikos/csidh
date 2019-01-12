@@ -504,14 +504,4 @@ mod test {
 
         assert_eq!(one.bits(), 7 * 64 + 2);
     }
-
-    #[test]
-    fn check_bits_against_biguint() {
-        use num_bigint::BigUint;
-
-        let bla = 1214121312333131;
-        let foo = LargeUint::from_u64(bla);
-        let bfoo: BigUint = bla.into();
-        assert_eq!(foo.bits(), bfoo.bits() as u64);
-    }
 }
