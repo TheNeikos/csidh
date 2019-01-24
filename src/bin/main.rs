@@ -1,4 +1,5 @@
 use csidh::CsidhPrivateKey;
+use std::fs::File;
 
 fn main() {
     let mut rng = rand::thread_rng();
@@ -11,6 +12,7 @@ fn main() {
 
     let a_shared = a_private.get_shared_secret(&b_public);
     let b_shared = b_private.get_shared_secret(&a_public);
+
 
     assert_eq!(a_shared, b_shared);
     println!("You have a common secret!: \n{:?}", a_shared);

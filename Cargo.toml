@@ -3,24 +3,24 @@ authors = ["Marcel Müller <neikos@neikos.email>"]
 edition = "2018"
 name = "csidh"
 version = "0.1.0"
-
-[lib]
-name = "csidh"
-path = "src/lib.rs"
-edition = "2018"
-doctest = true
-
-[profile.release]
-opt-level = 3
-debug = false
-rpath = false
-lto = true
-debug-assertions = false
-codegen-units = 16
-panic = 'abort'
-incremental = false
-overflow-checks = false
-
 [dependencies]
 byteorder = "1.2.7"
 rand = "0.6.1"
+
+[lib]
+doctest = true
+edition = "2018"
+name = "csidh"
+path = "src/lib.rs"
+
+[profile]
+[profile.release]
+codegen-units = 16
+debug = false
+debug-assertions = false
+incremental = false
+lto = true
+opt-level = 3
+overflow-checks = false
+panic = "abort"
+rpath = false

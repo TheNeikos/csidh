@@ -1,5 +1,6 @@
 use crate::galois::{GaloisElement, LargeUint};
 
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Curve {
     pub a: GaloisElement,
@@ -211,18 +212,18 @@ impl ProjectivePoint {
         self.z == GaloisElement::from_u64(0)
     }
 
-    fn double_add(r: &mut ProjectivePoint, s: &mut ProjectivePoint, p: ProjectivePoint,
-                  q: ProjectivePoint, pq: &ProjectivePoint, curve: &ProjectivePoint) {
-        let a = q.x + q.z;
-        let b = q.x - q.z;
+    fn double_add(r: &mut ProjectivePoint, s: &mut ProjectivePoint, p: &ProjectivePoint,
+                  q: &ProjectivePoint, pq: &ProjectivePoint, curve: &ProjectivePoint) {
+        let mut a = q.x + q.z;
+        let mut b = q.x - q.z;
         let mut c = p.x + p.z;
         let mut d = p.x - p.z;
         r.x = c.clone().square();
         s.x = d.clone().square();
         c.mul_with(&b);
         d.mul_with(&a);
-        let b = r.x - s.x;
-        let a = curve.z + curve.z;
+        b = r.x - s.x;
+        a = curve.z + curve.z;
         r.z = a * s.x;
         s.x = curve.x + a;
         r.z.add_from(&{r.z});
@@ -232,17 +233,19 @@ impl ProjectivePoint {
         r.z.add_from(&s.x);
         s.x = c + d;
         r.z.mul_with(&b);
-        let d = s.z.square();
-        let b = s.x.square();
+        d = s.z.square();
+        b = s.x.square();
         s.x = pq.z * b;
         s.z = pq.x * d;
     }
 
     pub fn ladder2(&self, curve: &ProjectivePoint, k: &LargeUint) -> ProjectivePoint {
-        let mut r = *self;
         let copy = *self;
-
+        let mut r = *self;
         let mut ret = ProjectivePoint::new(GaloisElement::from_u64(1), GaloisElement::from_u64(0));
+
+        let mut rr = &mut r;
+        let mut rret = &mut ret;
 
         let l = k.bits();
 
@@ -250,15 +253,15 @@ impl ProjectivePoint {
             let bit = k.bit(i);
 
             if bit {
-                std::mem::swap(&mut ret, &mut r);
+                std::mem::swap(&mut rret, &mut rr);
             }
 
-            let r2 = r;
-            let ret2 = ret;
-            ProjectivePoint::double_add(&mut ret, &mut r, ret2, r2, &copy, curve);
+            let r2 = *rr;
+            let ret2 = *rret;
+            ProjectivePoint::double_add(&mut rret, &mut rr, &ret2, &r2, &copy, curve);
 
             if bit {
-                std::mem::swap(&mut ret, &mut r);
+                std::mem::swap(&mut rret, &mut rr);
             }
         }
 
