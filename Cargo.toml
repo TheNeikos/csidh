@@ -13,10 +13,9 @@ edition = "2018"
 name = "csidh"
 path = "src/lib.rs"
 
-[profile]
 [profile.release]
 codegen-units = 16
-debug = false
+debug = true
 debug-assertions = false
 incremental = false
 lto = true
@@ -24,3 +23,4 @@ opt-level = 3
 overflow-checks = false
 panic = "abort"
 rpath = false
+

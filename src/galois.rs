@@ -184,56 +184,61 @@ impl GaloisElement {
 
     pub fn mul_with(&mut self, other: &GaloisElement) {
         let mut temp = [0u64; LIMBS + 1];
-        for k in 0..LIMBS {
-            let r = |i| -> usize { (k + i) % (LIMBS + 1) };
 
+        macro_rules! r {
+            ($k:ident, $i:expr) => {
+                ($k + $i) % (LIMBS + 1)
+            }
+        }
+
+        for k in 0..LIMBS {
             let m: u64 = INV_MIN_P_MOD_R.wrapping_mul(self.elements[k].wrapping_mul(other.elements[0])
-                                                 .wrapping_add(temp[r(0)]));
+                                                 .wrapping_add(temp[r!(k, 0)]));
             let mut carry = false;
             let mut other_carry = false;
             for i in 0..LIMBS {
                 let u: u128 = m as u128 * P.elements[i] as u128;
 
-                let (res, c) = temp[r(i)].overflowing_add(other_carry as u64);
+                let (res, c) = temp[r!(k,i)].overflowing_add(other_carry as u64);
                 other_carry = c;
-                temp[r(i)] = res;
+                temp[r!(k,i)] = res;
 
-                let (res, c) = temp[r(i)].overflowing_add(u as u64);
+                let (res, c) = temp[r!(k,i)].overflowing_add(u as u64);
                 other_carry |= c;
-                temp[r(i)] = res;
+                temp[r!(k,i)] = res;
 
-                let (res, c) = temp[r(i+1)].overflowing_add(carry as u64);
+                let (res, c) = temp[r!(k,i+1)].overflowing_add(carry as u64);
                 carry = c;
-                temp[r(i+1)] = res;
+                temp[r!(k,i+1)] = res;
 
-                let (res, c) = temp[r(i+1)].overflowing_add((u >> 64) as u64);
+                let (res, c) = temp[r!(k,i+1)].overflowing_add((u >> 64) as u64);
                 carry |= c;
-                temp[r(i+1)] = res;
+                temp[r!(k,i+1)] = res;
             }
-            temp[r(LIMBS)] += other_carry as u64;
+            temp[r!(k,LIMBS)] += other_carry as u64;
 
-            let mut carry = false;
-            let mut other_carry = false;
+            carry = false;
+            other_carry = false;
             for i in 0..LIMBS {
                 let u: u128 = self.elements[k] as u128 * other.elements[i] as u128;
 
-                let (res, c) = temp[r(i)].overflowing_add(other_carry as u64);
+                let (res, c) = temp[r!(k,i)].overflowing_add(other_carry as u64);
                 other_carry = c;
-                temp[r(i)] = res;
+                temp[r!(k,i)] = res;
 
-                let (res, c) = temp[r(i)].overflowing_add(u as u64);
+                let (res, c) = temp[r!(k,i)].overflowing_add(u as u64);
                 other_carry |= c;
-                temp[r(i)] = res;
+                temp[r!(k,i)] = res;
 
-                let (res, c) = temp[r(i+1)].overflowing_add(carry as u64);
+                let (res, c) = temp[r!(k,i+1)].overflowing_add(carry as u64);
                 carry = c;
-                temp[r(i+1)] = res;
+                temp[r!(k,i+1)] = res;
 
-                let (res, c) = temp[r(i+1)].overflowing_add((u >> 64) as u64);
+                let (res, c) = temp[r!(k,i+1)].overflowing_add((u >> 64) as u64);
                 carry |= c;
-                temp[r(i+1)] = res;
+                temp[r!(k,i+1)] = res;
             }
-            temp[r(LIMBS)] += other_carry as u64;
+            temp[r!(k,LIMBS)] += other_carry as u64;
         }
 
         for i in 0..LIMBS {
